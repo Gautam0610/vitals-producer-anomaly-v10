@@ -1,4 +1,3 @@
-
 import time
 import random
 from kafka import KafkaProducer
@@ -10,23 +9,25 @@ producer = KafkaProducer(
     value_serializer=lambda x: json.dumps(x).encode("utf-8"),
 )
 
-
 # Anomaly probability (adjust as needed)
 anomaly_probability = 0.1
 
+# Define valid ranges for vitals
+valid_ranges = {
+    "heart_rate": (60, 100),
+    "blood_pressure": (90, 140),  # Example systolic range
+    "oxygen_saturation": (95, 100),
+}
 
 # Generate vitals with random values
 def generate_heart_rate():
     return random.randint(50, 150)
 
-
 def generate_blood_pressure():
     return random.randint(80, 160)
 
-
 def generate_oxygen_saturation():
     return random.randint(90, 100)
-
 
 # Apply anomalies to vitals
 def apply_anomaly(vital, vital_type):
@@ -41,20 +42,15 @@ def apply_anomaly(vital, vital_type):
         print(f"Anomaly detected in {vital_type}: {vital}")
     return vital
 
-
 def is_valid_vital(vital_type, value):
     """
     Checks if a vital is within the allowed range.
     """
-    if vital_type == "heart_rate":
-        return 60 <= value <= 100
-    elif vital_type == "blood_pressure":
-        return 90 <= value <= 140  # Example systolic range
-    elif vital_type == "oxygen_saturation":
-        return 95 <= value <= 100
+    if vital_type in valid_ranges:
+        lower_bound, upper_bound = valid_ranges[vital_type]
+        return lower_bound <= value <= upper_bound
     else:
         return True  # Unknown vital, consider it valid
-
 
 # Modify the producer function to filter invalid vitals
 def produce_vitals(producer):
@@ -68,7 +64,6 @@ def produce_vitals(producer):
         blood_pressure = apply_anomaly(blood_pressure, "blood_pressure")
         oxygen_saturation = apply_anomaly(oxygen_saturation, "oxygen_saturation")
 
-
         # Create a dictionary for the vitals data
         vitals_data = {
             "heart_rate": heart_rate,
@@ -77,11 +72,12 @@ def produce_vitals(producer):
         }
 
         # Filter out invalid vitals before sending
-        valid_vitals_data = {
-            k: v
-            for k, v in vitals_data.items()
-            if is_valid_vital(k, v)
-        }
+        valid_vitals_data = {}
+        for key, value in vitals_data.items():
+            if is_valid_vital(key, value):
+                valid_vitals_data[key] = value
+            else:
+                print(f"Vital {key} with value {value} is outside the valid range.")
 
         # Send the valid vitals data to Kafka
         try:
@@ -92,7 +88,6 @@ def produce_vitals(producer):
             print(f"Error sending vitals: {e}")
 
         time.sleep(1)
-
 
 # Run the producer
 if __name__ == "__main__":
