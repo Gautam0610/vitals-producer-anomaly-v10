@@ -19,6 +19,14 @@ valid_ranges = {
     "oxygen_saturation": (95, 100),
 }
 
+# Define critical thresholds for vitals
+critical_thresholds = {
+    "heart_rate": 50,
+    "blood_pressure": 80,
+    "oxygen_saturation": 90,
+}
+
+
 # Generate vitals with random values
 def generate_heart_rate():
     return random.randint(50, 150)
@@ -52,7 +60,26 @@ def is_valid_vital(vital_type, value):
     else:
         return True  # Unknown vital, consider it valid
 
-# Modify the producer function to filter invalid vitals
+
+def check_critical_threshold(vital_type, value):
+    """
+    Checks if a vital falls below the critical threshold.
+    If it does, it logs a warning message and sends it to Kafka.
+    """
+    if vital_type in critical_thresholds:
+        threshold = critical_thresholds[vital_type]
+        if value < threshold:
+            message = f"CRITICAL: {vital_type} = {value} is below the critical threshold of {threshold}!"
+            print(message)
+            try:
+                producer.send("vitals", key=b"warning", value={"message": message})  # Send warning to Kafka
+                producer.flush()
+                print("Warning message sent to Kafka.")
+            except Exception as e:
+                print(f"Error sending warning message to Kafka: {e}")
+
+
+# Modify the producer function to filter invalid vitals and check for critical thresholds
 def produce_vitals(producer):
     while True:
         heart_rate = generate_heart_rate()
@@ -79,6 +106,9 @@ def produce_vitals(producer):
             else:
                 print(f"Vital {key} with value {value} is outside the valid range.")
 
+            # Check for critical thresholds
+            check_critical_threshold(key, value)
+
         # Send the valid vitals data to Kafka
         try:
             producer.send("vitals", value=valid_vitals_data)
@@ -88,6 +118,7 @@ def produce_vitals(producer):
             print(f"Error sending vitals: {e}")
 
         time.sleep(1)
+
 
 # Run the producer
 if __name__ == "__main__":
